@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Chain {
+  TON
+  BSC
+  ETH
+  SOL
+  BASE
+  POLYGON
+  TRON
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RampType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum RampStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentRequestStatus {
+  OPEN
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  phone             String?  @unique
+  passwordHash      String
+  pinHash           String?
+  name              String?
+  photoUrl          String?
+  emailVerified     Boolean  @default(false)
+  phoneVerified     Boolean  @default(false)
+  biometricEnabled  Boolean  @default(false)
+  twoFactorEnabled  Boolean  @default(false)
+  defaultCurrency   String   @default("NGN")
+  defaultLanguage   String   @default("en")
+  defaultNetwork    Chain?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  accountId         AccountId?
+  wallets           Wallet[]
+  sentTransactions  Transaction[]      @relation("SentTransactions")
+  paymentRequests   PaymentRequest[]
+  rampTransactions  RampTransaction[]
+  sessions          Session[]
+}
+
+model AccountId {
+  id        String   @id @default(uuid())
+  accountId String   @unique @db.VarChar(10)
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chain     Chain
+  address   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, chain])
+  @@index([address])
+}
+
+model Transaction {
+  id                  String             @id @default(uuid())
+  senderId             String
+  sender                User               @relation("SentTransactions", fields: [senderId], references: [id])
+  recipientAccountId  String
+  asset               String
+  amount              Decimal            @db.Decimal(36, 18)
+  network             Chain
+  feeAmount           Decimal?           @db.Decimal(36, 18)
+  status              TransactionStatus  @default(PENDING)
+  txHash              String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([senderId])
+  @@index([recipientAccountId])
+  @@index([status])
+}
+
+model PaymentRequest {
+  id        String                @id @default(uuid())
+  userId    String
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset     String
+  amount    Decimal?              @db.Decimal(36, 18)
+  status    PaymentRequestStatus  @default(OPEN)
+  expiresAt DateTime?
+  createdAt DateTime              @default(now())
+
+  @@index([userId])
+}
+
+model RampTransaction {
+  id        String     @id @default(uuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      RampType
+  amountNgn Decimal    @db.Decimal(18, 2)
+  provider  String
+  reference String     @unique
+  status    RampStatus @default(PENDING)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([reference])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
