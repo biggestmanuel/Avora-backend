@@ -1,15 +1,47 @@
-// TODO: wire up to Bachs (NGN on/off-ramp) via lib/ramp equivalent
+import crypto from "node:crypto";
+import { prisma } from "../../config/database.js";
+import { rampQueue } from "../../queues/ramp.queue.js";
 
 export const rampService = {
-  async deposit(input: { userId: string; amountNgn: string }) {
-    throw new Error("Not implemented");
+  async deposit(userId: string, input: { amountNgn: string }) {
+    const reference = `DEP-${crypto.randomUUID()}`;
+
+    const rampTx = await prisma.rampTransaction.create({
+      data: {
+        userId,
+        type: "DEPOSIT",
+        amountNgn: input.amountNgn,
+        provider: "bachs", // TODO: swap once Bachs integration is live; Paystack/Flutterwave as fallback
+        reference,
+        status: "PENDING",
+      },
+    });
+
+    await rampQueue.add("process-ramp", { rampTransactionId: rampTx.id });
+    return rampTx;
   },
 
-  async withdraw(input: { userId: string; amountNgn: string; bankAccount: string }) {
-    throw new Error("Not implemented");
+  async withdraw(userId: string, input: { amountNgn: string }) {
+    const reference = `WDR-${crypto.randomUUID()}`;
+
+    const rampTx = await prisma.rampTransaction.create({
+      data: {
+        userId,
+        type: "WITHDRAWAL",
+        amountNgn: input.amountNgn,
+        provider: "bachs",
+        reference,
+        status: "PENDING",
+      },
+    });
+
+    await rampQueue.add("process-ramp", { rampTransactionId: rampTx.id });
+    return rampTx;
   },
 
-  async getStatus(reference: string) {
-    throw new Error("Not implemented");
+  async getStatus(userId: string, reference: string) {
+    const rampTx = await prisma.rampTransaction.findFirst({ where: { reference, userId } });
+    if (!rampTx) throw Object.assign(new Error("Ramp transaction not found"), { statusCode: 404 });
+    return { reference: rampTx.reference, status: rampTx.status, type: rampTx.type };
   },
 };

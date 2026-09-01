@@ -1,15 +1,9 @@
 import type { FastifyInstance } from "fastify";
+import { rampController } from "../controllers/ramp.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 export async function rampRoutes(app: FastifyInstance) {
-  app.post("/deposit", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
-
-  app.post("/withdraw", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
-
-  app.get("/status/:reference", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
+  app.post("/deposit", { preHandler: requireAuth }, rampController.deposit);
+  app.post("/withdraw", { preHandler: requireAuth }, rampController.withdraw);
+  app.get("/status/:reference", { preHandler: requireAuth }, rampController.getStatus);
 }

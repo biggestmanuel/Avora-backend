@@ -1,23 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { authController } from "../controllers/auth.controller.js";
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/signup", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
-
-  app.post("/login", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
-
-  app.post("/verify-email", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
-
-  app.post("/verify-phone", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
-
-  app.post("/forgot-password", async (request, reply) => {
-    return reply.code(501).send({ message: "Not implemented" });
-  });
+  app.post("/signup", authController.signup);
+  app.post("/login", authController.login);
+  app.post("/verify-email", authController.verifyEmail);
+  app.post("/verify-phone", authController.verifyPhone);
+  app.post("/forgot-password", authController.forgotPassword);
 }

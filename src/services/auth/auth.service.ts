@@ -1,27 +1,76 @@
-// TODO: wire up to Prisma User model once prisma/schema.prisma is defined
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
+import { prisma } from "../../config/database.js";
+import { env } from "../../config/env.js";
+
+const SALT_ROUNDS = 12;
+
+function signSession(userId: string) {
+  return jwt.sign({ sub: userId }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
+}
+
+function sessionExpiry(): Date {
+  const days = parseInt(env.JWT_EXPIRES_IN) || 7;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+function sanitizeUser<T extends { passwordHash: string; pinHash: string | null }>(user: T) {
+  const { passwordHash, pinHash, ...safe } = user;
+  return safe;
+}
 
 export const authService = {
   async signup(input: { email: string; phone?: string; password: string }) {
-    throw new Error("Not implemented");
+    const existing = await prisma.user.findUnique({ where: { email: input.email } });
+    if (existing) throw Object.assign(new Error("Email already in use"), { statusCode: 409 });
+
+    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+    const user = await prisma.user.create({
+      data: { email: input.email, phone: input.phone, passwordHash },
+    });
+
+    const token = signSession(user.id);
+    await prisma.session.create({ data: { userId: user.id, token, expiresAt: sessionExpiry() } });
+
+    // TODO: real email/SMS delivery — no provider wired yet
+    return { user: sanitizeUser(user), token };
   },
 
   async login(input: { email: string; password: string }) {
-    throw new Error("Not implemented");
+    const user = await prisma.user.findUnique({ where: { email: input.email } });
+    if (!user) throw Object.assign(new Error("Invalid email or password"), { statusCode: 401 });
+
+    const valid = await bcrypt.compare(input.password, user.passwordHash);
+    if (!valid) throw Object.assign(new Error("Invalid email or password"), { statusCode: 401 });
+
+    const token = signSession(user.id);
+    await prisma.session.create({ data: { userId: user.id, token, expiresAt: sessionExpiry() } });
+    return { user: sanitizeUser(user), token };
   },
 
   async verifyEmail(input: { userId: string; code: string }) {
-    throw new Error("Not implemented");
+    // TODO: check against a real stored OTP once email delivery exists — any 6-digit code passes for now
+    if (!/^\d{6}$/.test(input.code)) throw Object.assign(new Error("Invalid code"), { statusCode: 400 });
+    const user = await prisma.user.update({ where: { id: input.userId }, data: { emailVerified: true } });
+    return sanitizeUser(user);
   },
 
   async verifyPhone(input: { userId: string; code: string }) {
-    throw new Error("Not implemented");
+    if (!/^\d{6}$/.test(input.code)) throw Object.assign(new Error("Invalid code"), { statusCode: 400 });
+    const user = await prisma.user.update({ where: { id: input.userId }, data: { phoneVerified: true } });
+    return sanitizeUser(user);
   },
 
   async requestPasswordReset(input: { email: string }) {
-    throw new Error("Not implemented");
+    const user = await prisma.user.findUnique({ where: { email: input.email } });
+    if (!user) return { success: true }; // don't leak which emails exist
+    const resetToken = crypto.randomBytes(32).toString("hex"); // TODO: persist + email this
+    return { success: true, resetToken };
   },
 
-  async resetPassword(input: { token: string; newPassword: string }) {
-    throw new Error("Not implemented");
+  async resetPassword() {
+    // No reset-token table exists yet — needs a schema addition before this can work for real
+    throw Object.assign(new Error("Password reset not yet available"), { statusCode: 501 });
   },
 };
