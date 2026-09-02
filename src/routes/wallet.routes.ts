@@ -6,4 +6,5 @@ export async function walletRoutes(app: FastifyInstance) {
   app.get("/balances", { preHandler: requireAuth }, walletController.getBalances);
   app.get("/addresses", { preHandler: requireAuth }, walletController.getAddresses);
   app.post("/resolve/:accountId", { preHandler: requireAuth }, walletController.resolveAccountId);
+  app.post("/register", { preHandler: requireAuth }, walletController.registerWallets);
 }

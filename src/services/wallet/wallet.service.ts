@@ -2,6 +2,8 @@ import { prisma } from "../../config/database.js";
 import { getChainAdapter, type ChainName } from "../../chains/index.js";
 import { logger } from "../../config/logger.js";
 
+const SUPPORTED_CHAINS: ChainName[] = ["ETH", "BSC", "BASE", "POLYGON", "TRON", "SOL", "TON"];
+
 export const walletService = {
   async getBalances(userId: string) {
     const wallets = await prisma.wallet.findMany({ where: { userId } });
@@ -44,5 +46,41 @@ export const walletService = {
       photoUrl: record.user.photoUrl,
       wallets: record.user.wallets.map((w) => ({ chain: w.chain, address: w.address })),
     };
+  },
+
+  /**
+   * Upserts Wallet rows for a user from client-generated public addresses.
+   * The backend NEVER receives or stores private keys/mnemonics —
+   * non-custodial by construction. Wallet model already has
+   * @@unique([userId, chain]) so this is a safe idempotent upsert.
+   */
+  async registerWallets(userId: string, addresses: { chain: ChainName; address: string }[]) {
+    const invalid = addresses.filter((a) => !SUPPORTED_CHAINS.includes(a.chain));
+    if (invalid.length > 0) {
+      throw Object.assign(
+        new Error(`Unsupported chain(s): ${invalid.map((a) => a.chain).join(", ")}`),
+        { statusCode: 400 }
+      );
+    }
+
+    const missing = SUPPORTED_CHAINS.filter((chain) => !addresses.some((a) => a.chain === chain));
+    if (missing.length > 0) {
+      throw Object.assign(
+        new Error(`Missing address(es) for required chain(s): ${missing.join(", ")}`),
+        { statusCode: 400 }
+      );
+    }
+
+    const results = await prisma.$transaction(
+      addresses.map(({ chain, address }) =>
+        prisma.wallet.upsert({
+          where: { userId_chain: { userId, chain } },
+          update: { address },
+          create: { userId, chain, address },
+        })
+      )
+    );
+
+    return results.map((w) => ({ chain: w.chain, address: w.address }));
   },
 };
