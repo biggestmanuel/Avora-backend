@@ -58,4 +58,24 @@ export const authController = {
       return handleError(err, reply);
     }
   },
+
+  async setPin(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const body = request.body as { pin: string };
+      const result = await authService.setPin(request.userId!, body.pin);
+      return reply.code(200).send(successResponse(result));
+    } catch (err) {
+      return handleError(err, reply);
+    }
+  },
+
+  async verifyPin(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const body = request.body as { pin: string };
+      const result = await authService.verifyPin(request.userId!, body.pin);
+      return reply.code(200).send(successResponse(result));
+    } catch (err) {
+      return handleError(err, reply);
+    }
+  },
 };

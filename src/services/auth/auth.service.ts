@@ -73,4 +73,28 @@ export const authService = {
     // No reset-token table exists yet — needs a schema addition before this can work for real
     throw Object.assign(new Error("Password reset not yet available"), { statusCode: 501 });
   },
+
+  async setPin(userId: string, pin: string) {
+    if (!/^\d{6}$/.test(pin)) {
+      throw Object.assign(new Error("PIN must be 6 digits"), { statusCode: 400 });
+    }
+    const pinHash = await bcrypt.hash(pin, SALT_ROUNDS);
+    await prisma.user.update({ where: { id: userId }, data: { pinHash } });
+    return { success: true };
+  },
+
+  async verifyPin(userId: string, pin: string) {
+    if (!/^\d{6}$/.test(pin)) {
+      throw Object.assign(new Error("PIN must be 6 digits"), { statusCode: 400 });
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.pinHash) {
+      throw Object.assign(new Error("No PIN set for this account"), { statusCode: 409 });
+    }
+    const valid = await bcrypt.compare(pin, user.pinHash);
+    if (!valid) {
+      throw Object.assign(new Error("Incorrect PIN"), { statusCode: 401 });
+    }
+    return { valid: true };
+  },
 };
